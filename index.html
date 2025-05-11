@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="style.css">
     <script src="socket.io/socket.io.js"></script>
     <base href="/tictactoe/">
+    <script>
+        // Verificar si estamos en la ruta correcta
+        if (!window.location.pathname.includes('/tictactoe')) {
+            window.location.href = '/tictactoe/';
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -80,16 +86,17 @@
         <div id="network-status" class="network-status">
             <span class="dot"></span> Desconectado
         </div>
+        <div class="version-info">
+            Tic Tac Toe v1.1 - Ruta: /tictactoe/
+        </div>
     </div>
     
+    <script src="script.js"></script>
     <script>
-        // Detectar si estamos en una subruta para ajustar las rutas relativas
-        const basePath = window.location.pathname.includes('/tictactoe') ? '/tictactoe/' : '/';
-        
-        // Cargar el script principal dinámicamente con la ruta correcta
-        const script = document.createElement('script');
-        script.src = new URL('script.js', document.baseURI).href;
-        document.body.appendChild(script);
+        // Para debugging - mostrar información sobre la conexión
+        console.log('Base URL:', document.baseURI);
+        console.log('Path:', window.location.pathname);
+        console.log('Ruta completa:', window.location.href);
     </script>
 </body>
 </html>

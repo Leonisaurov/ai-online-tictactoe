@@ -68,13 +68,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializar Socket.IO
     function initializeSocketConnection() {
         try {
-            // Intentar conectar al servidor
+            // Intentar conectar al servidor - adaptado para funcionar con ngrok
             const protocol = window.location.protocol.includes('https') ? 'wss' : 'ws';
             const host = window.location.hostname;
+            // Usar el mismo puerto que la página actual - ngrok se encargará de redirigir
             const port = window.location.port || (protocol === 'wss' ? 443 : 80);
             
-            // Determinar la ruta base para el socket
-            const basePath = window.location.pathname.includes('/tictactoe') ? '/tictactoe' : '';
+            // Determinar la ruta base para el socket - asegurar que funcione correctamente con la subruta
+            const pathParts = window.location.pathname.split('/');
+            const basePath = pathParts.includes('tictactoe') ? '/tictactoe' : '';
             
             // Opciones de conexión para mejor rendimiento y reconexión
             const socketOptions = {
@@ -87,7 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 path: `${basePath}/socket.io`
             };
             
-            socket = io(`${window.location.protocol}//${host}:${port}`, socketOptions);
+            // Para compatibilidad con ngrok - usar el mismo host y puerto
+            socket = io(socketOptions);
             
             // Evento: Conexión establecida
             socket.on('connect', () => {
@@ -509,6 +512,14 @@ document.addEventListener('DOMContentLoaded', () => {
         startScreen.classList.add('hidden');
         connectionScreen.classList.remove('hidden');
         gameScreen.classList.add('hidden');
+        
+        // Establecer conexión continua para evitar desconexiones con ngrok
+        if (pingInterval) clearInterval(pingInterval);
+        pingInterval = setInterval(() => {
+            if (socket && socket.connected) {
+                socket.emit('ping', { roomId: currentRoom || '' });
+            }
+        }, 15000); // Cada 15 segundos
     }
     
     // Mostrar pantalla de juego
@@ -547,5 +558,17 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.disconnect();
         }
         clearInterval(pingInterval);
+    });
+    
+    // Manejar errores de conexión Socket.IO
+    window.addEventListener('error', (event) => {
+        if (event.message && (
+            event.message.includes('socket.io') || 
+            event.message.includes('WebSocket') || 
+            event.message.includes('network'))
+        ) {
+            console.error('Error de conexión:', event.message);
+            updateNetworkStatus(false);
+        }
     });
 });

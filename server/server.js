@@ -20,20 +20,27 @@ const io = socketIO(server, {
     path: `${BASE_PATH}/socket.io`
 });
 
-// Middleware de seguridad
+// Configurar el puerto desde las variables de entorno o usar 4000 por defecto
+const PORT = process.env.PORT || 4000;
+
+// Middleware de seguridad con configuración adaptada para /tictactoe
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            connectSrc: ["'self'", "wss:", "ws:"],
+            connectSrc: ["'self'", "wss:", "ws:", "*"],
             imgSrc: ["'self'", "data:"],
-            styleSrc: ["'self'", "'unsafe-inline'"]
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            fontSrc: ["'self'", "data:"]
         }
     }
 }));
 app.use(compression());
-app.use(cors());
+app.use(cors({
+    origin: '*',
+    credentials: true
+}));
 
 // Middleware para logging
 app.use((req, res, next) => {
@@ -75,9 +82,21 @@ app.get(`${BASE_PATH}/stats`, (req, res) => {
         cpu: process.cpuUsage(),
         uptime: process.uptime(),
         rooms: Object.keys(rooms).length,
-        players: io.engine.clientsCount
+        players: io.engine.clientsCount,
+        basePath: BASE_PATH,
+        port: PORT
     };
     res.json(stats);
+});
+
+// Agregar endpoint específico para verificar la configuración de la subruta
+app.get(`${BASE_PATH}/config`, (req, res) => {
+    res.json({
+        status: 'ok',
+        basePath: BASE_PATH,
+        socketPath: `${BASE_PATH}/socket.io`,
+        port: PORT
+    });
 });
 
 // Intervalo para limpiar salas inactivas (cada 30 minutos)
@@ -244,8 +263,7 @@ function getServerIP() {
     return 'localhost';
 }
 
-// Puerto para el servidor
-const PORT = process.env.PORT || 3000;
+// Puerto ya definido al inicio (PORT = process.env.PORT || 4000)
 
 // Manejar errores del servidor
 server.on('error', (error) => {
@@ -259,8 +277,10 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('===========================================');
     console.log(`Servidor Tic Tac Toe en línea (Entorno: ${nodeEnv})`);
     console.log(`Puerto: ${PORT}`);
-    console.log(`Acceso local: http://localhost:${PORT}`);
-    console.log(`Acceso en red: http://${serverIP}:${PORT}`);
+    console.log(`Ruta base: ${BASE_PATH}`);
+    console.log(`Acceso local: http://localhost:${PORT}${BASE_PATH}`);
+    console.log(`Acceso en red: http://${serverIP}:${PORT}${BASE_PATH}`);
+    console.log(`URL para Socket.IO: ${BASE_PATH}/socket.io`);
     console.log(`Memoria disponible: ${Math.round(os.freemem() / 1024 / 1024)}MB / ${Math.round(os.totalmem() / 1024 / 1024)}MB`);
     console.log(`Node.js ${process.version}`);
     console.log('===========================================');
