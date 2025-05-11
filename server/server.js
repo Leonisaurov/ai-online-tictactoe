@@ -23,18 +23,9 @@ const io = socketIO(server, {
 // Configurar el puerto desde las variables de entorno o usar 4000 por defecto
 const PORT = process.env.PORT || 4000;
 
-// Middleware de seguridad con configuración adaptada para /tictactoe
+// Deshabilitar CSP para el desarrollo
 app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            connectSrc: ["'self'", "wss:", "ws:", "*"],
-            imgSrc: ["'self'", "data:"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            fontSrc: ["'self'", "data:"]
-        }
-    }
+    contentSecurityPolicy: false
 }));
 app.use(compression());
 app.use(cors({

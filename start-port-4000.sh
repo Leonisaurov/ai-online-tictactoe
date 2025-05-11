@@ -33,6 +33,15 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     sleep 2
 fi
 
+# Asegurarse de que todos los procesos existentes en el puerto estén detenidos
+echo -e "${YELLOW}Verificando si hay procesos usando el puerto $PORT...${NC}"
+CURRENT_PID=$(lsof -ti:$PORT -sTCP:LISTEN)
+if [ ! -z "$CURRENT_PID" ]; then
+    echo -e "${YELLOW}Deteniendo proceso existente (PID: $CURRENT_PID)...${NC}"
+    kill -9 $CURRENT_PID 2>/dev/null || true
+    sleep 2
+fi
+
 # Iniciar el servidor en segundo plano usando nohup o pm2 si está disponible
 if command -v pm2 &> /dev/null; then
     echo -e "${YELLOW}Iniciando el servidor con PM2...${NC}"
@@ -43,11 +52,21 @@ if command -v pm2 &> /dev/null; then
     echo -e "Detener: ${YELLOW}pm2 stop tictactoe${NC}"
 else
     echo -e "${YELLOW}Iniciando el servidor con nohup...${NC}"
+    # Matar cualquier proceso existente registrado en PID_FILE
+    PID_FILE="tictactoe.pid"
+    if [ -f "$PID_FILE" ]; then
+        OLD_PID=$(cat "$PID_FILE")
+        kill -9 $OLD_PID 2>/dev/null || true
+        rm "$PID_FILE"
+    fi
+    
+    # Iniciar el nuevo proceso
     nohup PORT=$PORT NODE_ENV=production node server/server.js > tictactoe.log 2>&1 &
     SERVER_PID=$!
+    echo $SERVER_PID > "$PID_FILE"
     echo -e "${GREEN}Servidor iniciado en segundo plano (PID: $SERVER_PID)${NC}"
     echo -e "Logs: ${YELLOW}tail -f tictactoe.log${NC}"
-    echo -e "Detener: ${YELLOW}kill $SERVER_PID${NC}"
+    echo -e "Detener: ${YELLOW}kill \$(cat $PID_FILE)${NC}"
 fi
 
 echo -e "${GREEN}=== Servidor Tic Tac Toe iniciado ===${NC}"
