@@ -85,19 +85,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 reconnectionDelayMax: 5000,
                 reconnectionAttempts: 5,
                 timeout: 20000,
-                transports: ['websocket', 'polling'],
-                path: `${basePath}/socket.io`
+                transports: ['polling', 'websocket'], // Priorizar polling sobre websocket
+                path: `${basePath}/socket.io`,
+                forceNew: true,
+                upgrade: false, // Evitar actualización automática a WebSocket
             };
             
-            // Para compatibilidad con ngrok - usar el mismo host y puerto
-            socket = io(socketOptions);
+            // Para compatibilidad con ngrok - usar el mismo host y puerto con opciones de fallback
+            socket = io({
+                ...socketOptions,
+                rejectUnauthorized: false, // Aceptar certificados auto-firmados
+                secure: window.location.protocol === 'https:'
+            });
             
             // Evento: Conexión establecida
             socket.on('connect', () => {
                 console.log('Conectado al servidor');
+                console.log('Usando transporte:', socket.io.engine.transport.name);
                 updateNetworkStatus(true);
                 refreshRooms();
                 connectionAttempts = 0;
+                
+                // Mostrar el tipo de transporte utilizado
+                networkStatus.innerHTML = `<span class="dot"></span> Conectado (${socket.io.engine.transport.name})`;
                 
                 // Iniciar ping periódico para mantener la conexión
                 clearInterval(pingInterval);
@@ -107,21 +117,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         socket.emit('ping', {});
                     }
-                }, 30000); // Ping cada 30 segundos
+                }, 10000); // Ping cada 10 segundos para mayor fiabilidad
             });
             
             // Evento: Desconexión
-            socket.on('disconnect', () => {
-                console.log('Desconectado del servidor');
+            socket.on('disconnect', (reason) => {
+                console.log('Desconectado del servidor:', reason);
                 updateNetworkStatus(false);
                 clearInterval(pingInterval);
                 
                 if (gameActive && gameMode === 'online') {
                     connectionAttempts++;
                     if (connectionAttempts <= MAX_RECONNECT_ATTEMPTS) {
-                        statusDisplay.textContent = `Intentando reconectar (${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})...`;
+                        statusDisplay.textContent = `Intentando reconectar (${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})... (${reason})`;
+                        
+                        // Forzar reconexión manualmente tras un breve retardo
+                        setTimeout(() => {
+                            if (!socket.connected) {
+                                socket.connect();
+                            }
+                        }, 1000);
                     } else {
-                        alert('Desconectado del servidor. El juego ha terminado.');
+                        alert('Desconectado del servidor: ' + reason + '. El juego ha terminado.');
                         resetToHome();
                     }
                 }
@@ -568,6 +585,22 @@ document.addEventListener('DOMContentLoaded', () => {
             event.message.includes('network'))
         ) {
             console.error('Error de conexión:', event.message);
+            updateNetworkStatus(false);
+            
+            if (socket) {
+                // Intentar reconectar con polling si hay error de WebSocket
+                console.log('Intentando reconectar con polling...');
+                socket.io.opts.transports = ['polling'];
+                socket.connect();
+            }
+        }
+    });
+    
+    // Detectar errores de conexión
+    window.addEventListener('unhandledrejection', (event) => {
+        if (event.reason && typeof event.reason.message === 'string' && 
+            (event.reason.message.includes('socket') || event.reason.message.includes('network'))) {
+            console.error('Error no manejado:', event.reason.message);
             updateNetworkStatus(false);
         }
     });

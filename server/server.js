@@ -15,23 +15,39 @@ const server = http.createServer(app);
 const io = socketIO(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST"],
+        credentials: true
     },
-    path: `${BASE_PATH}/socket.io`
+    path: `${BASE_PATH}/socket.io`,
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
+    perMessageDeflate: {
+        threshold: 32768
+    },
+    pingInterval: 25000,
+    pingTimeout: 20000
 });
 
 // Configurar el puerto desde las variables de entorno o usar 4000 por defecto
 const PORT = process.env.PORT || 4000;
 
-// Deshabilitar CSP para el desarrollo
+// Configuración de seguridad adaptada para WebSockets
 app.use(helmet({
-    contentSecurityPolicy: false
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false
 }));
 app.use(compression());
 app.use(cors({
     origin: '*',
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Middleware para manejar solicitudes OPTIONS pre-flight (importante para WebSockets)
+app.options('*', cors());
 
 // Middleware para logging
 app.use((req, res, next) => {
@@ -39,8 +55,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// Límite de tamaño para solicitudes JSON
+// Límite de tamaño para solicitudes y configuración para WebSockets
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Habilitar proxy para detectar correctamente la IP del cliente detrás de ngrok
+app.set('trust proxy', true);
 
 // Servir archivos estáticos desde el directorio principal en la subruta /tictactoe
 app.use(BASE_PATH, express.static(path.join(__dirname, '..'), {
@@ -96,12 +116,21 @@ setInterval(() => {
     Object.keys(rooms).forEach(roomId => {
         if (rooms[roomId].lastActivity && now - rooms[roomId].lastActivity > 30 * 60 * 1000) {
             // Si la sala está inactiva por más de 30 minutos, eliminarla
-            io.to(roomId).emit('roomClosed', { message: 'Sala cerrada por inactividad' });
+            try {
+                io.to(roomId).emit('roomClosed', { message: 'Sala cerrada por inactividad' });
+            } catch (err) {
+                console.error(`Error al notificar cierre de sala ${roomId}:`, err);
+            }
             delete rooms[roomId];
             console.log(`Sala eliminada por inactividad: ${roomId}`);
         }
     });
 }, 30 * 60 * 1000);
+
+// Monitoreo de estado de sockets
+setInterval(() => {
+    console.log(`Estado del servidor: ${io.engine.clientsCount} clientes conectados | ${Object.keys(rooms).length} salas activas`);
+}, 5 * 60 * 1000);
 
 io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
@@ -272,6 +301,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Acceso local: http://localhost:${PORT}${BASE_PATH}`);
     console.log(`Acceso en red: http://${serverIP}:${PORT}${BASE_PATH}`);
     console.log(`URL para Socket.IO: ${BASE_PATH}/socket.io`);
+    console.log(`Transportes Socket.IO: ${io.engine.opts.transports.join(', ')}`);
     console.log(`Memoria disponible: ${Math.round(os.freemem() / 1024 / 1024)}MB / ${Math.round(os.totalmem() / 1024 / 1024)}MB`);
     console.log(`Node.js ${process.version}`);
     console.log('===========================================');

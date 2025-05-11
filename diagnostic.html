@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Conexión - Tic Tac Toe</title>
+    <script src="socket.io/socket.io.js"></script>
+    <base href="/tictactoe/">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #3498db;
+            text-align: center;
+        }
+        .test-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .test-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .failure {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .log {
+            background-color: #333;
+            color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 150px;
+            overflow-y: auto;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .transport-options {
+            margin: 10px 0;
+        }
+        label {
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Diagnóstico de Conexión - Tic Tac Toe</h1>
+        
+        <div class="test-section">
+            <div class="test-title">Información del Cliente</div>
+            <div id="client-info" class="test-result info">Cargando información...</div>
+        </div>
+
+        <div class="transport-options">
+            <label>
+                <input type="radio" name="transport" value="polling" checked> Solo Polling
+            </label>
+            <label>
+                <input type="radio" name="transport" value="websocket"> Solo WebSocket
+            </label>
+            <label>
+                <input type="radio" name="transport" value="both"> Ambos (preferir Polling)
+            </label>
+        </div>
+        
+        <div class="controls">
+            <button id="start-test">Probar Conexión</button>
+            <button id="test-api">Probar API</button>
+            <button id="clear-log">Limpiar Log</button>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">Prueba de Conexión Socket.IO</div>
+            <div id="socket-test" class="test-result">No iniciado</div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">Prueba de API</div>
+            <div id="api-test" class="test-result">No iniciado</div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">Log de Eventos</div>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const clientInfo = document.getElementById('client-info');
+            const socketTest = document.getElementById('socket-test');
+            const apiTest = document.getElementById('api-test');
+            const logElement = document.getElementById('log');
+            const startTestButton = document.getElementById('start-test');
+            const testApiButton = document.getElementById('test-api');
+            const clearLogButton = document.getElementById('clear-log');
+            const transportOptions = document.getElementsByName('transport');
+            
+            let socket = null;
+            
+            // Mostrar información del cliente
+            function showClientInfo() {
+                const info = {
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    currentURL: window.location.href,
+                    protocol: window.location.protocol,
+                    host: window.location.host,
+                    path: window.location.pathname,
+                    isSecure: window.location.protocol === 'https:',
+                    screenSize: `${window.innerWidth}x${window.innerHeight}`,
+                    supportsFetch: typeof fetch !== 'undefined',
+                    supportsWebSocket: typeof WebSocket !== 'undefined'
+                };
+                
+                clientInfo.innerHTML = Object.entries(info)
+                    .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
+                    .join('<br>');
+                
+                log('Información del cliente cargada');
+            }
+            
+            // Función para agregar mensajes al log
+            function log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                logElement.innerHTML += `[${timestamp}] ${message}\n`;
+                logElement.scrollTop = logElement.scrollHeight;
+            }
+            
+            // Función para probar la conexión Socket.IO
+            function testSocketConnection() {
+                if (socket) {
+                    socket.disconnect();
+                    socket = null;
+                }
+                
+                socketTest.className = 'test-result warning';
+                socketTest.textContent = 'Intentando conectar...';
+                
+                const protocol = window.location.protocol.includes('https') ? 'wss' : 'ws';
+                const host = window.location.hostname;
+                const port = window.location.port || (protocol === 'wss' ? 443 : 80);
+                const basePath = window.location.pathname.includes('/tictactoe') ? '/tictactoe' : '';
+                
+                // Obtener el tipo de transporte seleccionado
+                let transports = [];
+                for (const option of transportOptions) {
+                    if (option.checked) {
+                        if (option.value === 'polling') {
+                            transports = ['polling'];
+                        } else if (option.value === 'websocket') {
+                            transports = ['websocket'];
+                        } else {
+                            transports = ['polling', 'websocket'];
+                        }
+                        break;
+                    }
+                }
+                
+                log(`Iniciando conexión Socket.IO con transportes: ${transports.join(', ')}`);
+                
+                const socketOptions = {
+                    transports: transports,
+                    path: `${basePath}/socket.io`,
+                    forceNew: true,
+                    reconnection: true,
+                    reconnectionDelay: 1000,
+                    reconnectionAttempts: 3,
+                    timeout: 20000
+                };
+                
+                try {
+                    socket = io(socketOptions);
+                    
+                    socket.on('connect', () => {
+                        log(`Conectado con Socket.IO usando ${socket.io.engine.transport.name}`);
+                        socketTest.className = 'test-result success';
+                        socketTest.innerHTML = `
+                            Conexión exitosa<br>
+                            ID: ${socket.id}<br>
+                            Transporte: ${socket.io.engine.transport.name}<br>
+                            Protocolo: ${protocol}<br>
+                            URL: ${protocol}://${host}:${port}${basePath}/socket.io
+                        `;
+                        
+                        // Ping de prueba
+                        socket.emit('ping', {}, (response) => {
+                            log(`Respuesta de ping recibida: ${JSON.stringify(response)}`);
+                        });
+                    });
+                    
+                    socket.on('connect_error', (error) => {
+                        log(`Error de conexión: ${error.message}`);
+                        socketTest.className = 'test-result failure';
+                        socketTest.innerHTML = `
+                            Error de conexión<br>
+                            Error: ${error.message}<br>
+                            Transporte: ${transports.join(', ')}<br>
+                            URL: ${protocol}://${host}:${port}${basePath}/socket.io
+                        `;
+                    });
+                    
+                    socket.on('disconnect', (reason) => {
+                        log(`Desconectado: ${reason}`);
+                        socketTest.className = 'test-result warning';
+                        socketTest.innerHTML += `<br>Desconectado: ${reason}`;
+                    });
+                    
+                    socket.io.engine.on('upgrade', (transport) => {
+                        log(`Transporte actualizado a: ${transport.name}`);
+                    });
+                    
+                    socket.io.engine.on('upgradeError', (err) => {
+                        log(`Error al actualizar transporte: ${err.message}`);
+                    });
+                    
+                } catch (e) {
+                    log(`Excepción al inicializar Socket.IO: ${e.message}`);
+                    socketTest.className = 'test-result failure';
+                    socketTest.textContent = `Error al inicializar: ${e.message}`;
+                }
+            }
+            
+            // Función para probar la API
+            function testAPI() {
+                apiTest.className = 'test-result warning';
+                apiTest.textContent = 'Consultando API...';
+                
+                const basePath = window.location.pathname.includes('/tictactoe') ? '/tictactoe' : '';
+                const healthURL = `${basePath}/health`;
+                const configURL = `${basePath}/config`;
+                
+                log(`Consultando API: ${healthURL}`);
+                
+                Promise.all([
+                    fetch(healthURL)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .catch(error => {
+                            return { error: error.message, endpoint: healthURL };
+                        }),
+                    fetch(configURL)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .catch(error => {
+                            return { error: error.message, endpoint: configURL };
+                        })
+                ])
+                .then(([healthResult, configResult]) => {
+                    const hasError = healthResult.error || configResult.error;
+                    
+                    if (hasError) {
+                        apiTest.className = 'test-result failure';
+                        apiTest.innerHTML = 'Errores en las peticiones:<br>';
+                        
+                        if (healthResult.error) {
+                            apiTest.innerHTML += `Health API: ${healthResult.error}<br>`;
+                            log(`Error en Health API: ${healthResult.error}`);
+                        } else {
+                            log(`Health API OK: ${JSON.stringify(healthResult)}`);
+                        }
+                        
+                        if (configResult.error) {
+                            apiTest.innerHTML += `Config API: ${configResult.error}`;
+                            log(`Error en Config API: ${configResult.error}`);
+                        } else {
+                            log(`Config API OK: ${JSON.stringify(configResult)}`);
+                        }
+                    } else {
+                        apiTest.className = 'test-result success';
+                        apiTest.innerHTML = 'API funcionando correctamente:<br>';
+                        apiTest.innerHTML += `Health: ${JSON.stringify(healthResult)}<br>`;
+                        apiTest.innerHTML += `Config: ${JSON.stringify(configResult)}`;
+                        
+                        log('APIs respondiendo correctamente');
+                    }
+                });
+            }
+            
+            // Event listeners
+            startTestButton.addEventListener('click', testSocketConnection);
+            testApiButton.addEventListener('click', testAPI);
+            clearLogButton.addEventListener('click', () => {
+                logElement.innerHTML = '';
+                log('Log limpiado');
+            });
+            
+            // Inicializar
+            showClientInfo();
+            log('Herramienta de diagnóstico iniciada');
+        });
+    </script>
+</body>
+</html>
