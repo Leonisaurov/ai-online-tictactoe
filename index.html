@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe Multijugador</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="socket.io/socket.io.js"></script>
+    <base href="/tictactoe/">
+</head>
+<body>
+    <div class="container">
+        <h1>Tic Tac Toe Multijugador</h1>
+        
+        <!-- Pantalla de inicio -->
+        <div id="start-screen">
+            <div class="form-group">
+                <h2>Jugar en LAN</h2>
+                <div class="input-group">
+                    <input type="text" id="room-id" placeholder="Nombre de la sala">
+                </div>
+                <div class="button-group">
+                    <button id="create-room-btn">Crear Sala</button>
+                    <button id="join-room-btn">Unirse a Sala</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <h3>Salas Disponibles</h3>
+                <div id="rooms-list" class="rooms-list">
+                    <p>Cargando salas...</p>
+                </div>
+                <button id="refresh-rooms-btn">Actualizar Lista</button>
+            </div>
+            
+            <div class="form-group">
+                <h3>Jugar Localmente</h3>
+                <button id="local-game-btn">Juego Local (2 Jugadores)</button>
+            </div>
+        </div>
+        
+        <!-- Pantalla de conexión -->
+        <div id="connection-screen" class="hidden">
+            <h2>Conectando a la sala: <span id="room-id-display"></span></h2>
+            <p id="connection-status">Esperando a otro jugador...</p>
+            <div class="player-info">
+                <p>Eres el jugador: <span id="player-symbol"></span></p>
+            </div>
+            <button id="cancel-connection-btn">Cancelar</button>
+        </div>
+        
+        <!-- Pantalla de juego -->
+        <div id="game-screen" class="hidden">
+            <div class="game-info">
+                <div id="room-info">
+                    <p>Sala: <span id="current-room"></span></p>
+                    <p>Jugador: <span id="current-player-symbol"></span></p>
+                </div>
+                <div id="status" class="status">Esperando...</div>
+            </div>
+            
+            <div class="board" id="board">
+                <div class="cell" data-cell-index="0"></div>
+                <div class="cell" data-cell-index="1"></div>
+                <div class="cell" data-cell-index="2"></div>
+                <div class="cell" data-cell-index="3"></div>
+                <div class="cell" data-cell-index="4"></div>
+                <div class="cell" data-cell-index="5"></div>
+                <div class="cell" data-cell-index="6"></div>
+                <div class="cell" data-cell-index="7"></div>
+                <div class="cell" data-cell-index="8"></div>
+            </div>
+            
+            <div class="controls">
+                <button id="restart-button">Reiniciar Juego</button>
+                <button id="exit-game-btn">Salir</button>
+            </div>
+        </div>
+
+        <div id="network-status" class="network-status">
+            <span class="dot"></span> Desconectado
+        </div>
+    </div>
+    
+    <script>
+        // Detectar si estamos en una subruta para ajustar las rutas relativas
+        const basePath = window.location.pathname.includes('/tictactoe') ? '/tictactoe/' : '/';
+        
+        // Cargar el script principal dinámicamente con la ruta correcta
+        const script = document.createElement('script');
+        script.src = new URL('script.js', document.baseURI).href;
+        document.body.appendChild(script);
+    </script>
+</body>
+</html>
